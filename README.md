@@ -59,6 +59,9 @@ A production-grade IoT streaming pipeline that simulates 50 smartwatch devices a
 4. **PostgreSQL** — Daily range partitions on `event_time`. Records both `event_time` (device clock) and `ingestion_time` (server clock) to compute end-to-end pipeline lag.
 5. **Observability Stack** — Prometheus scrapes three exporters every 15 seconds. Grafana auto-provisions two dashboards on startup via the provisioning directory.
 
+<img width="2816" height="1536" alt="Gemini_Generated_Image_dcgq8kdcgq8kdcgq" src="https://github.com/user-attachments/assets/2a2cf131-48a0-4bc6-a875-00066b4d9485" />
+
+
 ---
 
 ## 🎯 Anomaly Simulation Results
