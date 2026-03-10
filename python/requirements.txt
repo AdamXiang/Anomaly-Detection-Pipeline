@@ -1,0 +1,15 @@
+# requirements.txt
+
+# Kafka
+confluent-kafka==2.3.0      # Confluent 官方 Python Client
+                             # 底層是 C library (librdkafka)，效能遠優於 kafka-python
+
+# PostgreSQL
+psycopg2-binary==2.9.9      # PostgreSQL Driver（binary 版，不需要編譯）
+
+# 資料處理
+faker==22.0.0               # 生成模擬資料（裝置 ID、用戶 ID）
+python-dotenv==1.0.0        # 讀取 .env 環境變數
+
+# 開發工具
+loguru==0.7.2               # 比內建 logging 更友善的 Log 工具

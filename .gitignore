@@ -1,0 +1,56 @@
+# ==============================================================================
+#  .gitignore for Anomaly Detection Pipeline (Kafka + Postgres + Python)
+# ==============================================================================
+
+# ── 1. Environment Variables & Secrets ──
+.env
+.env.*
+!.env.template
+
+# ── 2. Python & Virtual Environment ──
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python packaging & distribution
+*.egg-info/
+.installed.cfg
+*.egg
+build/
+dist/
+
+# ── 3. PyCharm / JetBrains IDE ──
+.idea/
+*.iml
+*.iws
+out/
+.idea_modules/
+
+# ── 4. OS Specific Files ──
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── 5. Project Specific Data & Logs ──
+*.log
+logs/
+
+# 如果未來你在 docker-compose 裡把 data volume 綁定到本機目錄，這些也要忽略
+# (目前我們用的是 docker managed volume，但寫上去以防萬一)
+/data/
+/postgres_data/
+/kafka_data/
+/prometheus_data/
+/grafana_data/

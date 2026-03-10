@@ -1,0 +1,12 @@
+[project]
+name = "monitor"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "confluent-kafka==2.3.0",
+    "faker==22.0.0",
+    "loguru==0.7.2",
+    "psycopg2-binary==2.9.9",
+    "python-dotenv==1.0.0",
+]
