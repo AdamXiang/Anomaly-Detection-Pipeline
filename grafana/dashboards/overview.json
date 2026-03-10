@@ -1,0 +1,347 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_POSTGRESQL",
+      "label": "PostgreSQL",
+      "type": "datasource",
+      "pluginId": "postgres"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "postgres", "name": "PostgreSQL", "version": "1.0.0" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" },
+    { "type": "panel", "id": "gauge", "name": "Gauge", "version": "" },
+    { "type": "panel", "id": "barchart", "name": "Bar chart", "version": "" },
+    { "type": "panel", "id": "table", "name": "Table", "version": "" }
+  ],
+  "title": "IoT 智慧手錶監控總覽",
+  "uid": "iot-watch-overview",
+  "description": "即時監控 50 台運動手錶的心率、血氧、E2E Lag 與吞吐量",
+  "tags": ["iot", "smartwatch", "realtime"],
+  "timezone": "Asia/Taipei",
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+
+    {
+      "id": 1,
+      "title": "📊 系統總覽",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 3 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT COUNT(*) AS \"總筆數\" FROM iot_data.athlete_telemetry WHERE event_time >= NOW() - INTERVAL '15 minutes'",
+          "format": "table",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT COUNT(DISTINCT device_id) AS \"在線裝置\" FROM iot_data.athlete_telemetry WHERE event_time >= NOW() - INTERVAL '1 minute'",
+          "format": "table",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT ROUND(AVG(lag_seconds)::NUMERIC, 3) AS \"平均 E2E Lag (秒)\" FROM iot_data.vw_ingestion_lag WHERE event_time >= NOW() - INTERVAL '1 minute'",
+          "format": "table",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT COUNT(*) AS \"爆量事件數\" FROM iot_data.athlete_telemetry WHERE mode = 'burst' AND event_time >= NOW() - INTERVAL '15 minutes'",
+          "format": "table",
+          "refId": "D"
+        }
+      ]
+    },
+
+    {
+      "id": 2,
+      "title": "💓 即時心率趨勢（全裝置平均）",
+      "description": "每10秒聚合一次，紅線為危險閾值 (180 bpm)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 3, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "none",
+          "displayName": "${__field.labels.device_id}",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 130 },
+              { "color": "red", "value": 180 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "avg_heart_rate" },
+            "properties": [
+              { "id": "displayName", "value": "平均心率 (bpm)" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT\n  DATE_TRUNC('second', event_time) + (EXTRACT(second FROM event_time)::int / 10 * interval '10 seconds') AS time,\n  ROUND(AVG(heart_rate)::NUMERIC, 1) AS avg_heart_rate,\n  ROUND(MAX(heart_rate)::NUMERIC, 1) AS max_heart_rate,\n  ROUND(MIN(heart_rate)::NUMERIC, 1) AS min_heart_rate\nFROM iot_data.athlete_telemetry\nWHERE $__timeFilter(event_time)\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 3,
+      "title": "🩺 血氧飽和度趨勢 (SpO₂)",
+      "description": "低於 90% 為危險值，正常應維持 95% 以上",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 3, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 85,
+          "max": 101,
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "spanNulls": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 90 },
+              { "color": "yellow", "value": 94 },
+              { "color": "green",  "value": 96 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT\n  DATE_TRUNC('second', event_time) + (EXTRACT(second FROM event_time)::int / 10 * interval '10 seconds') AS time,\n  ROUND(AVG(blood_oxygen)::NUMERIC, 1) AS avg_spo2,\n  MIN(blood_oxygen) AS min_spo2\nFROM iot_data.athlete_telemetry\nWHERE $__timeFilter(event_time)\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 4,
+      "title": "⚡ E2E Ingestion Lag（端對端延遲）",
+      "description": "event_time → ingestion_time 的延遲，P95 < 1 秒為健康標準",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT\n  DATE_TRUNC('second', event_time) + (EXTRACT(second FROM event_time)::int / 10 * interval '10 seconds') AS time,\n  ROUND(AVG(lag_seconds)::NUMERIC, 3)                                             AS avg_lag,\n  ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY lag_seconds)::NUMERIC, 3)   AS p95_lag,\n  ROUND(MAX(lag_seconds)::NUMERIC, 3)                                             AS max_lag\nFROM iot_data.vw_ingestion_lag\nWHERE $__timeFilter(event_time)\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 5,
+      "title": "📈 每秒訊息吞吐量（Throughput）",
+      "description": "正常模式 ~100 msg/sec；爆量模式峰值 ~30,000 msg/sec",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 11, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "burst_msgs" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } },
+              { "id": "displayName", "value": "爆量訊息數/秒" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT\n  DATE_TRUNC('second', event_time) AS time,\n  COUNT(*) FILTER (WHERE mode = 'normal') AS normal_msgs,\n  COUNT(*) FILTER (WHERE mode = 'burst')  AS burst_msgs,\n  COUNT(*)                                AS total_msgs\nFROM iot_data.athlete_telemetry\nWHERE $__timeFilter(event_time)\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 6,
+      "title": "🔋 各裝置電量分布（最新狀態）",
+      "description": "低於 20% 需要充電警示",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 19, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "percent" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "battery_level" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red",    "value": null },
+                    { "color": "orange", "value": 20 },
+                    { "color": "yellow", "value": 50 },
+                    { "color": "green",  "value": 80 }
+                  ]
+                }
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [{ "displayName": "battery_level", "desc": false }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT DISTINCT ON (device_id)\n  device_id,\n  battery_level,\n  heart_rate,\n  blood_oxygen,\n  mode,\n  event_time AS last_seen\nFROM iot_data.athlete_telemetry\nWHERE event_time >= NOW() - INTERVAL '5 minutes'\nORDER BY device_id, event_time DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 7,
+      "title": "🚨 Normal vs Burst 模式比較",
+      "description": "視覺化爆量事件 vs 正常事件的心率差異",
+      "type": "barchart",
+      "gridPos": { "x": 12, "y": 19, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": {
+        "xField": "mode",
+        "orientation": "auto",
+        "groupWidth": 0.7,
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+          "rawSql": "SELECT\n  mode,\n  ROUND(AVG(heart_rate)::NUMERIC, 1)    AS avg_heart_rate,\n  ROUND(AVG(blood_oxygen)::NUMERIC, 1)  AS avg_spo2,\n  COUNT(*)                              AS record_count\nFROM iot_data.athlete_telemetry\nWHERE $__timeFilter(event_time)\nGROUP BY mode\nORDER BY mode",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+
+  ],
+
+  "templating": {
+    "list": [
+      {
+        "name": "DS_POSTGRESQL",
+        "type": "datasource",
+        "pluginId": "postgres",
+        "hide": 2
+      },
+      {
+        "name": "device",
+        "label": "裝置篩選",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+        "query": "SELECT DISTINCT device_id FROM iot_data.athlete_telemetry ORDER BY 1",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "hide": 0
+      }
+    ]
+  },
+
+  "annotations": {
+    "list": [
+      {
+        "name": "爆量事件",
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRESQL}" },
+        "rawQuery": true,
+        "rawSql": "SELECT DISTINCT\n  MIN(event_time) AS time,\n  MAX(event_time) AS timeEnd,\n  '🚨 BURST MODE' AS text,\n  'burst' AS tags\nFROM iot_data.athlete_telemetry\nWHERE mode = 'burst'\n  AND $__timeFilter(event_time)\nGROUP BY DATE_TRUNC('minute', event_time)",
+        "enable": true,
+        "hide": false,
+        "iconColor": "orange"
+      }
+    ]
+  }
+}

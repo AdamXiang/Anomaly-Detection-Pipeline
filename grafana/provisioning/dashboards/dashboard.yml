@@ -1,0 +1,16 @@
+# ================================================================
+#  Grafana Dashboard Loader 設定
+#  告訴 Grafana 從哪個目錄自動載入 Dashboard JSON 檔案
+#  注意：path 必須與 compose volume 的掛載路徑完全一致！
+# ================================================================
+apiVersion: 1
+
+providers:
+  - name: 'default'
+    orgId: 1
+    folder: 'IoT Monitoring'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30  # 每 30 秒自動重新載入（開發時修改 JSON 不需重啟）
+    options:
+      path: /etc/grafana/dashboards   # ★ 必須與 compose 的 volume 掛載路徑一致
