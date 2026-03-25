@@ -1,0 +1,139 @@
+# 建立規則目錄
+groups:
+  - name: kafka_alerts
+    rules:
+
+      # =============================================
+      # Anomaly 1：Broker 宕機告警
+      # =============================================
+      - alert: KafkaBrokerDown
+        expr: kafka_brokers < 3
+        for: 30s           # 持續 30 秒才觸發（避免瞬間抖動）
+        labels:
+          severity: critical
+          team: data-engineering
+        annotations:
+          summary: "🔴 Kafka Broker 宕機"
+          description: |
+            目前存活 Broker 數：{{ $value }}（預期：3）
+            請立即檢查 Docker 容器狀態。
+            指令：docker compose ps | grep kafka
+
+      # =============================================
+      # Anomaly 2：Consumer Lag 告警
+      # =============================================
+      - alert: KafkaConsumerLagHigh
+        expr: |
+          sum by (consumergroup, topic) (
+            kafka_consumergroup_lag
+          ) > 1000
+        for: 1m
+        labels:
+          severity: warning
+          team: data-engineering
+        annotations:
+          summary: "⚠️ Consumer Lag 過高"
+          description: |
+            Consumer Group：{{ $labels.consumergroup }}
+            Topic：{{ $labels.topic }}
+            當前 Lag：{{ $value }} 筆
+            請檢查 Consumer 進程是否正常運行。
+
+      - alert: KafkaConsumerLagCritical
+        expr: |
+          sum by (consumergroup, topic) (
+            kafka_consumergroup_lag
+          ) > 5000
+        for: 2m
+        labels:
+          severity: critical
+          team: data-engineering
+        annotations:
+          summary: "🔴 Consumer Lag 嚴重積壓"
+          description: |
+            Consumer Group：{{ $labels.consumergroup }}
+            Topic：{{ $labels.topic }}
+            當前 Lag：{{ $value }} 筆（超過 5000 筆臨界值）
+            資料延遲可能超過 50 秒，需要立即處理！
+
+      # Lag 增長速率告警（比絕對值更早預警）
+      - alert: KafkaConsumerLagIncreasing
+        expr: |
+          rate(
+            sum by (consumergroup) (kafka_consumergroup_lag)[5m]
+          ) > 50
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "📈 Consumer Lag 持續增長中"
+          description: |
+            Consumer Group {{ $labels.consumergroup }} 
+            Lag 正以每秒 {{ $value | printf "%.1f" }} 筆的速率增長。
+
+  - name: postgresql_alerts
+    rules:
+
+      # =============================================
+      # Anomaly 3：DB 連線壓力告警
+      # =============================================
+      - alert: PostgreSQLConnectionsHigh
+        expr: |
+          pg_stat_activity_count{datname="iotdb"} > 70
+        for: 1m
+        labels:
+          severity: warning
+          team: data-engineering
+        annotations:
+          summary: "⚠️ PostgreSQL 連線數過高"
+          description: |
+            資料庫：{{ $labels.datname }}
+            當前連線數：{{ $value }}（告警閾值：70）
+            建議：檢查是否需要引入 PgBouncer。
+
+      - alert: PostgreSQLConnectionsCritical
+        expr: |
+          pg_stat_activity_count{datname="iotdb"} > 90
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 PostgreSQL 連線數接近上限"
+          description: |
+            當前連線數 {{ $value }}，max_connections 預設為 100。
+            新連線將被拒絕！立即採取行動。
+
+      # DB 服務存活告警
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 PostgreSQL 服務離線"
+          description: "PostgreSQL 無法連線，整個 Pipeline 已停止寫入！"
+
+  - name: infrastructure_alerts
+    rules:
+
+      # CPU 使用率告警
+      - alert: HighCPUUsage
+        expr: |
+          rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ CPU 使用率過高"
+          description: "{{ $labels.job }} CPU 使用率：{{ $value | printf \"%.1f\" }}%"
+
+      # 記憶體使用告警
+      - alert: HighMemoryUsage
+        expr: |
+          process_resident_memory_bytes / 1024 / 1024 > 1500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ 記憶體使用過高"
+          description: "{{ $labels.job }} 記憶體使用：{{ $value | printf \"%.0f\" }} MB"

@@ -1,0 +1,107 @@
+# =============================================
+# AlertManager 設定檔
+# =============================================
+
+global:
+  # SMTP 設定（Email 告警）
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'iot-alert@yourdomain'
+  smtp_auth_username: 'iot-alert@yourdomain'
+  smtp_auth_password: 'iot-alert@yourdomain'    # Gmail App Password
+  smtp_require_tls: true
+
+  # 全域超時設定
+  resolve_timeout: 5m
+
+# =============================================
+# 告警路由規則
+# =============================================
+route:
+  receiver: 'default-receiver'
+  group_by: ['alertname', 'consumergroup', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: 'critical-receiver'
+      continue: false
+
+    - matchers:
+        - severity="warning"
+      receiver: 'warning-receiver'
+      continue: false
+
+# =============================================
+# 告警抑制規則（Inhibit Rules）
+# =============================================
+inhibit_rules:
+  - source_matchers:
+      - alertname="KafkaBrokerDown"
+      - severity="critical"
+    target_matchers:
+      - alertname="KafkaConsumerLagHigh"
+    equal: ['job']
+
+# =============================================
+# 接收者設定
+# =============================================
+receivers:
+  # 預設接收者
+  - name: 'default-receiver'
+    slack_configs:
+      - api_url: 'https://hooks:slack:com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#iot-monitoring'
+        title: '{{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: true    # 告警恢復時也發通知
+
+  # Critical：Slack + Email
+  - name: 'critical-receiver'
+    slack_configs:
+      - api_url: 'https://hooks:slack:com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#iot-alerts-critical'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        title_link: 'http://localhost:3000'
+        text: |
+          *告警狀態：* {{ .Status | toUpper }}
+          {{ range .Alerts }}
+          *摘要：* {{ .Annotations.summary }}
+          *詳情：* {{ .Annotations.description }}
+          *開始時間：* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+        send_resolved: true
+
+    email_configs:
+      - to: 'iot-alert@yourdomain'
+        headers:
+          Subject: '🔴 [CRITICAL] IoT 監控系統告警：{{ .GroupLabels.alertname }}'
+        html: |
+          <h2 style="color:red;">🚨 Critical Alert</h2>
+          <table border="1" cellpadding="5">
+          <tr><th>告警名稱</th><td>{{ .GroupLabels.alertname }}</td></tr>
+          <tr><th>狀態</th><td>{{ .Status }}</td></tr>
+          {{ range .Alerts }}
+          <tr><th>摘要</th><td>{{ .Annotations.summary }}</td></tr>
+          <tr><th>詳情</th><td>{{ .Annotations.description }}</td></tr>
+          {{ end }}
+          </table>
+          <p><a href="http://localhost:3000">開啟 Grafana Dashboard</a></p>
+        send_resolved: true
+
+  # Warning：只發 Slack
+  - name: 'warning-receiver'
+    slack_configs:
+      - api_url: 'https://hooks:slack:com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#iot-monitoring'
+        color: 'warning'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *摘要：* {{ .Annotations.summary }}
+          *詳情：* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true

@@ -54,3 +54,5 @@ logs/
 /kafka_data/
 /prometheus_data/
 /grafana_data/
+
+/monitoring/alertmanager/alertmanager.yml

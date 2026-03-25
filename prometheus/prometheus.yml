@@ -33,3 +33,15 @@ scrape_configs:
     static_configs:
       - targets: ['grafana:3000']
     metrics_path: '/metrics'
+
+# Prometheus 設定（prometheus.yml）加入 AlertManager 連接
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093    # Docker 網路內部名稱
+
+# 引入告警規則
+rule_files:
+  - /etc/prometheus/rules/*.yml
